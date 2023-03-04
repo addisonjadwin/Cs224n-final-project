@@ -52,7 +52,8 @@ class MultitaskBERT(nn.Module):
             elif config.option == 'finetune':
                 param.requires_grad = True
         ### TODO
-        raise NotImplementedError
+        self.linear = nn.Linear(BERT_HIDDEN_SIZE, N_SENTIMENT_CLASSES)
+        self.linear_paraphrase = nn.Linear(2 * BERT_HIDDEN_SIZE, 1)
 
 
     def forward(self, input_ids, attention_mask):
@@ -62,7 +63,9 @@ class MultitaskBERT(nn.Module):
         # When thinking of improvements, you can later try modifying this
         # (e.g., by adding other layers).
         ### TODO
-        raise NotImplementedError
+        encoded_sentences = self.bert.forward(input_ids, attention_mask)['pooler_output']
+        
+        return encoded_sentences
 
 
     def predict_sentiment(self, input_ids, attention_mask):
@@ -72,7 +75,10 @@ class MultitaskBERT(nn.Module):
         Thus, your output should contain 5 logits for each sentence.
         '''
         ### TODO
-        raise NotImplementedError
+        x = self.bert.forward(input_ids, attention_mask)['pooler_output']
+        out = self.linear(x)
+
+        return out
 
 
     def predict_paraphrase(self,
@@ -83,7 +89,12 @@ class MultitaskBERT(nn.Module):
         during evaluation, and handled as a logit by the appropriate loss function.
         '''
         ### TODO
-        raise NotImplementedError
+        logits1 = self.bert.forward(input_ids_1, attention_mask_1)['pooler_output']
+        logits2 = self.bert.forward(input_ids_2, attention_mask_2)['pooler_output']
+        logits_concat = torch.cat((logits1, logits2), dim=1)
+        logits_linear = self.linear_paraphrase(logits_concat)
+
+        return logits_linear
 
 
     def predict_similarity(self,
@@ -94,7 +105,11 @@ class MultitaskBERT(nn.Module):
         during evaluation, and handled as a logit by the appropriate loss function.
         '''
         ### TODO
-        raise NotImplementedError
+        logits1 = self.bert.forward(input_ids_1, attention_mask_1)['pooler_output']
+        logits2 = self.bert.forward(input_ids_2, attention_mask_2)['pooler_output']
+
+        similarity = torch.nn.functional.cosine_similarity(logits1, logits2, dim=1, eps=1e-8)
+        return similarity
 
 
 

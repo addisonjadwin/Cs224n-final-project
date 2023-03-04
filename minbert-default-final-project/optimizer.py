@@ -58,7 +58,9 @@ class AdamW(Optimizer):
                 if len(state) == 0:
                     state["t"] = 0
                     state["m"] = torch.zeros(grad.size(), dtype=torch.long)
+                    state["m"] = state["m"].to(grad.device)
                     state["v"] = torch.zeros(grad.size(), dtype=torch.long)
+                    state["v"] = state["v"].to(grad.device)
 
                 # 1- Update first and second moments of the gradients
                 state["t"] += 1
