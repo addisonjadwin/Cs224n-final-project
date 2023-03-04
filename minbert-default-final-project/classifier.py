@@ -50,7 +50,6 @@ class BertSentimentClassifier(torch.nn.Module):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.linear = nn.Linear(config.hidden_size, self.num_labels)
 
-        raise NotImplementedError
 
 
     def forward(self, input_ids, attention_mask):
