@@ -208,7 +208,6 @@ def model_test_eval(dataloader, model, device):
 
         b_ids = b_ids.to(device)
         b_mask = b_mask.to(device)
-        print(b_ids)
         logits = model(b_ids, b_mask)
         logits = logits.detach().cpu().numpy()
         preds = np.argmax(logits, axis=1).flatten()
@@ -278,6 +277,7 @@ def train(args):
             b_ids = b_ids.to(device)
             b_mask = b_mask.to(device)
             b_labels = b_labels.to(device)
+            print(b_ids)
 
             optimizer.zero_grad()
             logits = model(b_ids, b_mask)
