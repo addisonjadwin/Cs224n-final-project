@@ -233,6 +233,14 @@ def save_model(model, optimizer, args, config, filepath):
     torch.save(save_info, filepath)
     print(f"save the model to {filepath}")
 
+def find_first_zero(tensor):
+    """Finds the index of the first occurrence of 0 in a tensor."""
+    idx = torch.where(tensor == 0)[0]
+    if len(idx) > 0:
+        return idx[0].item()
+    else:
+        return None
+
 
 def train(args):
     device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
@@ -277,7 +285,22 @@ def train(args):
             b_ids = b_ids.to(device)
             b_mask = b_mask.to(device)
             b_labels = b_labels.to(device)
+
+            b_indices = []
+            b_targets = b_ids #copy original labels to use as targets
+            for sentence in b_ids:
+                len_sen = find_first_zero(sentence)
+                num_mask = int(0.15 * len_sen)
+                indices = np.random.choice(range(0, len_sen), size=num_mask, replace=False)
+                b_indices.append(indices)
+                for i in indices:
+                    sentence[i] = -9999 #mask ID
             print(b_ids)
+
+            # for x in range(0, len(b_targets)): #loop through batch
+            #     for y in range(0, len(b_targets[x])): #loop through each sentence
+            #         if y not in b_indices[x]: #look at indices which aren't masked
+            #             b_targets[x] = float('-inf')  # we don't want to use non-masked targets
 
             optimizer.zero_grad()
             logits = model(b_ids, b_mask)
