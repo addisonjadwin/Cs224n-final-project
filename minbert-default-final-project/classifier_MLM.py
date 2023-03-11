@@ -239,7 +239,7 @@ def find_first_zero(tensor):
     if len(idx) > 0:
         return idx[0].item()
     else:
-        return None
+        return tensor.shape[0]
 
 
 def train(args):
