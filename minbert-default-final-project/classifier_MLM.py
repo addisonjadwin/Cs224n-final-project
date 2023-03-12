@@ -8,7 +8,8 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import classification_report, f1_score, recall_score, accuracy_score
 
 # change it with respect to the original model
-from tokenizer import BertTokenizer
+from tokenizer import BertTokenizer, SpecialTokensMixin
+
 from bert import BertModel
 from optimizer import AdamW
 from tqdm import tqdm
@@ -148,12 +149,36 @@ class MLMDataset(Dataset):
     def __getitem__(self, idx):
         return self.dataset[idx]
 
+    def clean_up_tokenization(self, out_string):
+      """
+      Clean up a list of simple English tokenization artifacts like spaces before punctuations and abbreviated forms.
+      Args:
+        out_string (:obj:`str`): The text to clean up.
+      Returns:
+        :obj:`str`: The cleaned-up string.
+      """
+      out_string_2 = (
+        out_string.replace(" .", ".")
+          .replace(" ?", "?")
+          .replace(" !", "!")
+          .replace(" ,", ",")
+          .replace(" ' ", "'")
+          .replace(" n't", "n't")
+          .replace(" 'm", "'m")
+          .replace(" 's", "'s")
+          .replace(" 've", "'ve")
+          .replace(" 're", "'re")
+      )
+      return out_string_2
+
     def mask(self, sents):
         sents_masked = []
         indices_all = []
         for sent in sents:
-            sent = self.tokenizer.tokenize(sent)
-            #print("sent before: ", sent)
+            print('sent before: ', sent)
+            sent = self.tokenizer._tokenize(sent)
+            print("sent before: ", sent)
+            print("sent size: ", len(sent))
             mask = np.random.binomial(1, 0.15, (len(sent),))
             #print('mask: ', mask)
             #print('np.where command: ', np.where(mask)[0])
@@ -161,8 +186,10 @@ class MLMDataset(Dataset):
                 sent[word_id] = "[MASK]"
             indices_all.append(np.where(mask)[0])
             #print("sent after: ", sent)
-            sents_masked.append(sent)
-
+            sent_str = self.tokenizer.convert_tokens_to_string(sent)
+            #sent_str = self.clean_up_tokenization(sent_str)
+            print("sent_str after clean up: ", sent_str)
+            sents_masked.append(sent_str)
         #print("sents_masked in mask fxn: ", sents_masked)
         return sents_masked, indices_all
 
@@ -171,12 +198,12 @@ class MLMDataset(Dataset):
         labels = [x[1] for x in data]
         sent_ids = [x[2] for x in data]
         sents_masked, mask_indices = self.mask(sents)
+        #print('sents: ', sents)
         #print('sents_masked: ', sents_masked)
-
         encoding = self.tokenizer(sents, return_tensors='pt', padding=True, truncation=True)
-        #print('encoding: ', encoding['input_ids'])
+        print('encoding: ', encoding['input_ids'])
         encoding_masked = self.tokenizer(sents_masked, return_tensors='pt', padding=True, truncation=True)
-        #print('encoding_masked: ', encoding_masked['input_ids'])
+        print('encoding_masked: ', encoding_masked['input_ids'])
         token_ids = torch.LongTensor(encoding['input_ids'])
         token_ids_masked = torch.LongTensor(encoding_masked['input_ids'])
         attention_mask = torch.LongTensor(encoding['attention_mask'])
