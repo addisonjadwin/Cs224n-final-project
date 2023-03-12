@@ -152,6 +152,8 @@ class MLMDataset(Dataset):
         sents_masked = sents
         indices_all = []
         for sent in sents_masked:
+            sent = self.tokenizer.tokenize(sent)
+            print(sent)
             mask = np.random.binomial(1, 0.15, (len(sent),))
             for word_id in np.where(mask)[0]:
                 sent[word_id] = "[MASK]"
