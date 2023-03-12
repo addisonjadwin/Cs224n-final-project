@@ -65,6 +65,37 @@ class BertSentimentClassifier(torch.nn.Module):
         return encoded_sentences_linear
 
 
+class MLM(torch.nn.Module):
+    '''
+    This module performs MLM.
+
+    In the SST dataset, there are 5 sentiment categories (from 0 - "negative" to 4 - "positive").
+    Thus, your forward() should return one logit for each of the 5 classes.
+    '''
+
+    def __init__(self, config):
+        super(MLM, self).__init__()
+        self.num_labels = config.num_labels
+        self.bert = BertModel.from_pretrained('bert-base-uncased')
+
+        # Pretrain mode does not require updating bert paramters.
+        for param in self.bert.parameters():
+            if config.option == 'pretrain':
+                param.requires_grad = False
+            elif config.option == 'finetune':
+                param.requires_grad = True
+
+        ### TODO
+        # self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.linear = nn.Linear(config.hidden_size, self.bert.config.vocab_size)
+
+    def forward(self, input_ids, attention_mask):
+        encoded_sentences = self.bert.forward(input_ids, attention_mask)['pooler_output']
+        # encoded_sentences_dropout = self.dropout(encoded_sentences)
+        encoded_sentences_linear = self.linear(encoded_sentences)
+
+        return encoded_sentences_linear
+
 
 class SentimentDataset(Dataset):
     def __init__(self, dataset, args):
@@ -104,6 +135,62 @@ class SentimentDataset(Dataset):
 
         return batched_data
 
+
+class MLMDataset(Dataset):
+    def __init__(self, dataset, args):
+        self.dataset = dataset
+        self.p = args
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        return self.dataset[idx]
+
+    def mask(self, sents):
+        sents_masked = sents
+        indices_all = []
+        for sent in sents_masked:
+            mask = np.random.binomial(1, 0.15, (len(sent),))
+            for word_id in np.where(mask)[0]:
+                sent[word_id] = "[MASK]"
+            indices = indices_all.append(np.where(mask)[0])
+        return sents_masked, indices_all
+
+    def pad_data(self, data):
+        sents = [x[0] for x in data]
+        labels = [x[1] for x in data]
+        sent_ids = [x[2] for x in data]
+        sents_masked, mask_indices = self.mask(sents)
+
+        encoding = self.tokenizer(sents, return_tensors='pt', padding=True, truncation=True)
+        encoding_masked = self.tokenizer(sents_masked, return_tensors='pt', padding=True, truncation=True)
+        token_ids = torch.LongTensor(encoding['input_ids'])
+        token_ids_masked = torch.LongTensor(encoding_masked['input_ids'])
+        attention_mask = torch.LongTensor(encoding['attention_mask'])
+        attention_mask_masked = torch.LongTensor(encoding_masked['attention_mask'])
+        labels = torch.LongTensor(labels)
+
+        return token_ids, attention_mask, labels, sents, sent_ids, token_ids_masked, attention_mask_masked, mask_indices
+
+    def collate_fn(self, all_data):
+        token_ids, attention_mask, labels, sents, sent_ids, token_ids_masked, attention_mask_masked, mask_indices = self.pad_data(all_data)
+
+        batched_data = {
+            'token_ids': token_ids,
+            'attention_mask': attention_mask,
+            'labels': labels,
+            'sents': sents,
+            'sent_ids': sent_ids,
+            'token_ids_masked': token_ids_masked,
+            'attention_mask_masked': attention_mask_masked,
+            'mask_indices': mask_indices
+        }
+
+        return batched_data
+
+
 class SentimentTestDataset(Dataset):
     def __init__(self, dataset, args):
         self.dataset = dataset
@@ -138,6 +225,7 @@ class SentimentTestDataset(Dataset):
             }
 
         return batched_data
+
 
 # Load the data: a list of (sentence, label)
 def load_data(filename, flag='train'):
@@ -249,7 +337,7 @@ def train(args):
     train_data, num_labels = load_data(args.train, 'train')
     dev_data = load_data(args.dev, 'valid')
 
-    train_dataset = SentimentDataset(train_data, args)
+    train_dataset = MLMDataset(train_data, args)
     dev_dataset = SentimentDataset(dev_data, args)
 
     train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=args.batch_size,
@@ -279,23 +367,24 @@ def train(args):
         train_loss = 0
         num_batches = 0
         for batch in tqdm(train_dataloader, desc=f'train-{epoch}', disable=TQDM_DISABLE):
-            b_ids, b_mask, b_labels = (batch['token_ids'],
-                                       batch['attention_mask'], batch['labels'])
+            b_ids, b_mask, b_labels, b_ids_masked, b_mask_masked, mask_indices = (batch['token_ids'],
+                                       batch['attention_mask'], batch['labels'],
+                                       batch['token_ids_masked'], batch['attention_mask_masked'], batch['mask_indices'])
 
-            b_ids = b_ids.to(device)
-            b_mask = b_mask.to(device)
+            b_ids_masked = b_ids_masked.to(device)
+            b_mask_masked = b_mask_masked.to(device)
             b_labels = b_labels.to(device)
 
-            b_indices = []
-            b_targets = b_ids #copy original labels to use as targets
-            for sentence in b_ids:
-                len_sen = find_first_zero(sentence)
-                num_mask = int(0.15 * len_sen)
-                indices = np.random.choice(range(0, len_sen), size=num_mask, replace=False)
-                b_indices.append(indices)
-                for i in indices:
-                    sentence[i] = -9999 #mask ID
-            print(b_ids)
+            # b_indices = []
+            # b_targets = b_ids #copy original labels to use as targets
+            # for sentence in b_ids:
+            #     len_sen = find_first_zero(sentence)
+            #     num_mask = int(0.15 * len_sen)
+            #     indices = np.random.choice(range(0, len_sen), size=num_mask, replace=False)
+            #     b_indices.append(indices)
+            #     for i in indices:
+            #         sentence[i] = -9999 #mask ID
+            # print(b_ids)
 
             # for x in range(0, len(b_targets)): #loop through batch
             #     for y in range(0, len(b_targets[x])): #loop through each sentence
@@ -303,8 +392,19 @@ def train(args):
             #             b_targets[x] = float('-inf')  # we don't want to use non-masked targets
 
             optimizer.zero_grad()
-            logits = model(b_ids, b_mask)
-            loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
+            logits = model(b_ids_masked, b_mask_masked)
+
+            targets = torch.zeros_like(logits)
+            for i in range(0, len(targets)): #loops thru sentences
+                for j in range(0, len(targets[i])): #loops thru words in sentence
+                    if j in mask_indices[i]:
+                        targets[i][j][b_ids[i][j]] = 1
+                    else:
+                        targets[i][j] = torch.full_like(targets[i][j], -float('inf'))
+
+
+            loss = F.cross_entropy(logits, targets, reduction='sum') / args.batch_size
+            #loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
 
             loss.backward()
             optimizer.step()
