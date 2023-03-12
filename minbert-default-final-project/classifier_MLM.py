@@ -149,15 +149,21 @@ class MLMDataset(Dataset):
         return self.dataset[idx]
 
     def mask(self, sents):
-        sents_masked = sents
+        sents_masked = []
         indices_all = []
-        for sent in sents_masked:
+        for sent in sents:
             sent = self.tokenizer.tokenize(sent)
-            print(sent)
+            #print("sent before: ", sent)
             mask = np.random.binomial(1, 0.15, (len(sent),))
+            #print('mask: ', mask)
+            #print('np.where command: ', np.where(mask)[0])
             for word_id in np.where(mask)[0]:
                 sent[word_id] = "[MASK]"
-            indices = indices_all.append(np.where(mask)[0])
+            indices_all.append(np.where(mask)[0])
+            #print("sent after: ", sent)
+            sents_masked.append(sent)
+
+        #print("sents_masked in mask fxn: ", sents_masked)
         return sents_masked, indices_all
 
     def pad_data(self, data):
@@ -165,9 +171,12 @@ class MLMDataset(Dataset):
         labels = [x[1] for x in data]
         sent_ids = [x[2] for x in data]
         sents_masked, mask_indices = self.mask(sents)
+        #print('sents_masked: ', sents_masked)
 
         encoding = self.tokenizer(sents, return_tensors='pt', padding=True, truncation=True)
+        #print('encoding: ', encoding['input_ids'])
         encoding_masked = self.tokenizer(sents_masked, return_tensors='pt', padding=True, truncation=True)
+        #print('encoding_masked: ', encoding_masked['input_ids'])
         token_ids = torch.LongTensor(encoding['input_ids'])
         token_ids_masked = torch.LongTensor(encoding_masked['input_ids'])
         attention_mask = torch.LongTensor(encoding['attention_mask'])
