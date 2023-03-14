@@ -403,7 +403,7 @@ def train(args):
 
     config = SimpleNamespace(**config)
 
-    model = BertSentimentClassifier(config)
+    model = MLM(config)
     model = model.to(device)
 
     lr = args.lr
@@ -442,8 +442,12 @@ def train(args):
 
             optimizer.zero_grad()
             logits = model(b_ids_masked, b_mask_masked)
+            print(logits)
+            print(torch.Size(logits))
 
             targets = torch.zeros_like(logits)
+            print(targets)
+            print(torch.Size(targets))
             for i in range(0, len(targets)): #loops thru sentences
                 for j in range(0, len(targets[i])): #loops thru words in sentence
                     if j in mask_indices[i]:
