@@ -95,6 +95,7 @@ class MLM(torch.nn.Module):
         # encoded_sentences_dropout = self.dropout(encoded_sentences)
 
         out = torch.zeros(len(input_ids), self.bert.config.vocab_size) #num_words x vocab_size
+        print("out size: ", out.size())
         for i in range(len(input_ids)):
             guess = self.linear(encoded_sentences) #vocab_size x 1
             print("guess size: ", guess.size())
