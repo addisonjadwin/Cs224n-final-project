@@ -184,10 +184,12 @@ class MLMDataset(Dataset):
             #print('mask: ', mask)
             #print('np.where command: ', np.where(mask)[0])
             for word_id in np.where(mask)[0]:
-                 if (sent[word_id])[:2] == "##":
-                     sent[word_id] = "##[MASK]"
-                 else:
-                     sent[word_id] = "[MASK]"
+                if(word_id != (len(mask) - 1)):
+                    if (sent[word_id + 1])[:2] != "##":
+                        sent[word_id] = "[MASK]"
+                else:
+                    sent[word_id] = "[MASK]"
+
             indices_all.append(np.where(mask)[0])
             print("tokenized sent after mask: ", sent)
             # ids = [self.tokenizer._convert_token_to_id(token) for token in sent]
