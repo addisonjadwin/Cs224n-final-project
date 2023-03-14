@@ -186,7 +186,7 @@ class MLMDataset(Dataset):
                 sent[word_id] = "[MASK]"
             indices_all.append(np.where(mask)[0])
             #print("sent after: ", sent)
-            ids = PretrainedTokenizer.convert_tokens_to_ids(sent)
+            ids = PreTrainedTokenizer.convert_tokens_to_ids(sent)
             print(ids)
             sent_str = self.tokenizer.convert_tokens_to_string(sent)
             #sent_str = self.clean_up_tokenization(sent_str)
