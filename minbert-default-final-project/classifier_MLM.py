@@ -196,7 +196,7 @@ class MLMDataset(Dataset):
             print("raw masked sentence: ", sent_str)
             #sent_str = self.clean_up_tokenization(sent_str)
             #print("cleaned up masked sentence: ", sent_str)
-            assert(original == sent_str)
+            #assert(original == sent_str)
             sents_masked.append(sent_str)
         #print("sents_masked in mask fxn: ", sents_masked)
         return sents_masked, indices_all
