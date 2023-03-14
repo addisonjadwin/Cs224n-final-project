@@ -183,9 +183,9 @@ class MLMDataset(Dataset):
         indices_all = []
         for sent in sents:
             original = sent
-            print('sent before: ', sent)
+            #print('sent before: ', sent)
             sent = self.tokenizer._tokenize(sent)
-            print("sent after tokenization: ", sent)
+            #print("sent after tokenization: ", sent)
             #print("sent size: ", len(sent))
             mask = np.random.binomial(1, 0.15, (len(sent),))
             #print('mask: ', mask)
@@ -198,15 +198,15 @@ class MLMDataset(Dataset):
                     sent[word_id] = "[MASK]"
 
             indices_all.append(np.where(mask)[0])
-            print("tokenized sent after mask: ", sent)
+            #print("tokenized sent after mask: ", sent)
             # ids = [self.tokenizer._convert_token_to_id(token) for token in sent]
             # print(ids)
             sent_str = self.tokenizer.convert_tokens_to_string(sent)
-            print("raw masked sentence: ", sent_str)
+            #print("raw masked sentence: ", sent_str)
             #sent_str = self.clean_up_tokenization(sent_str)
             #print("cleaned up masked sentence: ", sent_str)
             #assert(original == sent_str)
-            print("re-tokenized masked sentence:", self.tokenizer._tokenize(sent_str))
+            #print("re-tokenized masked sentence:", self.tokenizer._tokenize(sent_str))
             sents_masked.append(sent_str)
         #print("sents_masked in mask fxn: ", sents_masked)
         return sents_masked, indices_all
@@ -219,9 +219,9 @@ class MLMDataset(Dataset):
         #print('sents: ', sents)
         #print('sents_masked: ', sents_masked)
         encoding = self.tokenizer(sents, return_tensors='pt', padding=True, truncation=True)
-        print('encoding: ', encoding['input_ids'])
+        #print('encoding: ', encoding['input_ids'])
         encoding_masked = self.tokenizer(sents_masked, return_tensors='pt', padding=True, truncation=True)
-        print('encoding_masked: ', encoding_masked['input_ids'])
+        #print('encoding_masked: ', encoding_masked['input_ids'])
         token_ids = torch.LongTensor(encoding['input_ids'])
         token_ids_masked = torch.LongTensor(encoding_masked['input_ids'])
         attention_mask = torch.LongTensor(encoding['attention_mask'])
@@ -449,12 +449,7 @@ def train(args):
 
             optimizer.zero_grad()
             logits = model(b_ids_masked, b_mask_masked)
-            print(logits)
-            print(torch.Size(logits))
-
             targets = torch.zeros_like(logits)
-            print(targets)
-            print(torch.Size(targets))
             for i in range(0, len(targets)): #loops thru sentences
                 for j in range(0, len(targets[i])): #loops thru words in sentence
                     if j in mask_indices[i]:
@@ -463,6 +458,7 @@ def train(args):
                         targets[i][j] = torch.full_like(targets[i][j], -float('inf'))
 
 
+            print(targets)
             loss = F.cross_entropy(logits, targets, reduction='sum') / args.batch_size
             #loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
 
