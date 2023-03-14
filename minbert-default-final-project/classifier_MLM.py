@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import classification_report, f1_score, recall_score, accuracy_score
 
 # change it with respect to the original model
-from tokenizer import BertTokenizer, SpecialTokensMixin
+from tokenizer import BertTokenizer, SpecialTokensMixin, PretrainedTokenizer
 
 from bert import BertModel
 from optimizer import AdamW
