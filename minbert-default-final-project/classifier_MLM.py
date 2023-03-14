@@ -175,9 +175,9 @@ class MLMDataset(Dataset):
         sents_masked = []
         indices_all = []
         for sent in sents:
-            #print('sent before: ', sent)
+            print('sent before: ', sent)
             sent = self.tokenizer._tokenize(sent)
-            #print("sent before: ", sent)
+            print("sent after tokenization: ", sent)
             #print("sent size: ", len(sent))
             mask = np.random.binomial(1, 0.15, (len(sent),))
             #print('mask: ', mask)
@@ -185,12 +185,13 @@ class MLMDataset(Dataset):
             for word_id in np.where(mask)[0]:
                 sent[word_id] = "[MASK]"
             indices_all.append(np.where(mask)[0])
-            #print("sent after: ", sent)
-            ids = [self.tokenizer._convert_token_to_id(token) for token in sent]
-            print(ids)
+            print("tokenized sent after mask: ", sent)
+            # ids = [self.tokenizer._convert_token_to_id(token) for token in sent]
+            # print(ids)
             sent_str = self.tokenizer.convert_tokens_to_string(sent)
-            #sent_str = self.clean_up_tokenization(sent_str)
-            #print("sent_str after clean up: ", sent_str)
+            print("raw masked sentence: ", sent_str)
+            sent_str = self.clean_up_tokenization(sent_str)
+            print("cleaned up masked sentence: ", sent_str)
             sents_masked.append(sent_str)
         #print("sents_masked in mask fxn: ", sents_masked)
         return sents_masked, indices_all
