@@ -454,6 +454,8 @@ def train(args):
                 for j in range(0, len(targets[i])): #loops thru words in sentence
                     if j in mask_indices[i]:
                         targets[i][j][b_ids[i][j]] = 1
+                        #print("b ids: ", b_ids[i][j])
+                        #print("length of targets[i][j]", targets[i][j].size())
                     else:
                         targets[i][j] = torch.full_like(targets[i][j], -float('inf'))
 
