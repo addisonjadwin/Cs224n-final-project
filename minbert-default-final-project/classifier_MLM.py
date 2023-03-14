@@ -93,9 +93,13 @@ class MLM(torch.nn.Module):
     def forward(self, input_ids, attention_mask):
         encoded_sentences = self.bert.forward(input_ids, attention_mask)['pooler_output']
         # encoded_sentences_dropout = self.dropout(encoded_sentences)
-        encoded_sentences_linear = self.linear(encoded_sentences)
 
-        return encoded_sentences_linear
+        out = torch.zeros(len(input_ids), self.bert.config.vocab_size) #num_words x vocab_size
+        for i in range(len(input_ids)):
+            guess = self.linear(encoded_sentences) #vocab_size x 1
+            out[:, i] = guess
+
+        return out
 
 
 class SentimentDataset(Dataset):
