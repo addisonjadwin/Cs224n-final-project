@@ -97,6 +97,7 @@ class MLM(torch.nn.Module):
         out = torch.zeros(len(input_ids), self.bert.config.vocab_size) #num_words x vocab_size
         for i in range(len(input_ids)):
             guess = self.linear(encoded_sentences) #vocab_size x 1
+            print("guess size: ", guess.size())
             out[:, i] = guess
 
         return out
