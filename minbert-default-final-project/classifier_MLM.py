@@ -13,6 +13,7 @@ from tokenizer import BertTokenizer, SpecialTokensMixin, PreTrainedTokenizer
 from bert import BertModel
 from optimizer import AdamW
 from tqdm import tqdm
+from itertools import zip_longest
 
 import torch.nn as nn
 
@@ -76,7 +77,7 @@ class MLM(torch.nn.Module):
 
     def __init__(self, config):
         super(MLM, self).__init__()
-        self.num_labels = config.num_labels
+        #self.num_labels = config.num_labels
         self.bert = BertModel.from_pretrained('bert-base-uncased')
 
         # Pretrain mode does not require updating bert paramters.
@@ -309,6 +310,70 @@ def load_data(filename, flag='train'):
     else:
         return data
 
+
+def load_multitask_data_MLM(sentiment_filename,paraphrase_filename,similarity_filename,split='train'):
+    sentiment_data = []
+    num_labels = {}
+    if split == 'test':
+        with open(sentiment_filename, 'r') as fp:
+            for record in csv.DictReader(fp,delimiter = '\t'):
+                sent = record['sentence'].lower().strip()
+                sent_id = record['id'].lower().strip()
+                sentiment_data.append((sent,sent_id))
+    else:
+        with open(sentiment_filename, 'r') as fp:
+            for record in csv.DictReader(fp,delimiter = '\t'):
+                sent = record['sentence'].lower().strip()
+                sent_id = record['id'].lower().strip()
+                label = int(record['sentiment'].strip())
+                if label not in num_labels:
+                    num_labels[label] = len(num_labels)
+                sentiment_data.append((sent, label,sent_id))
+
+    print(f"Loaded {len(sentiment_data)} {split} examples from {sentiment_filename}")
+
+    paraphrase_data = []
+    if split == 'test':
+        with open(paraphrase_filename, 'r') as fp:
+            for record in csv.DictReader(fp,delimiter = '\t'):
+                sent_id = record['id'].lower().strip()
+                paraphrase_data.append((preprocess_string(record['sentence1']),
+                                        preprocess_string(record['sentence2']),
+                                        sent_id))
+
+    else:
+        with open(paraphrase_filename, 'r') as fp:
+            for record in csv.DictReader(fp,delimiter = '\t'):
+                try:
+                    sent_id = record['id'].lower().strip()
+                    paraphrase_data.append((preprocess_string(record['sentence1']),
+                                            preprocess_string(record['sentence2']),
+                                            int(float(record['is_duplicate'])),sent_id))
+                except:
+                    pass
+
+    print(f"Loaded {len(paraphrase_data)} {split} examples from {paraphrase_filename}")
+
+    similarity_data = []
+    if split == 'test':
+        with open(similarity_filename, 'r') as fp:
+            for record in csv.DictReader(fp,delimiter = '\t'):
+                sent_id = record['id'].lower().strip()
+                similarity_data.append((preprocess_string(record['sentence1']),
+                                        preprocess_string(record['sentence2'])
+                                        ,sent_id))
+    else:
+        with open(similarity_filename, 'r') as fp:
+            for record in csv.DictReader(fp,delimiter = '\t'):
+                sent_id = record['id'].lower().strip()
+                similarity_data.append((preprocess_string(record['sentence1']),
+                                        preprocess_string(record['sentence2']),
+                                        float(record['similarity']),sent_id))
+
+    print(f"Loaded {len(similarity_data)} {split} examples from {similarity_filename}")
+
+    return sentiment_data, num_labels, paraphrase_data, similarity_data
+
 # Evaluate the model for accuracy.
 def model_eval(dataloader, model, device):
     model.eval() # switch to eval model, will turn off randomness like dropout
@@ -390,20 +455,36 @@ def train(args):
     device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
     # Load data
     # Create the data and its corresponding datasets and dataloader
-    train_data, num_labels = load_data(args.train, 'train')
+    train_data_SST, num_labels_SST = load_data('data/ids-sst-train.csv', 'train')
+    train_data_CFIMDB, num_labels_CFIMDB = load_data('data/ids-cfimdb-train.csv', 'train')
+    train_data_quora, num_labels_quora = load_data('data/quora-train.csv', 'train')
+    train_data_STS, num_labels_STS = load_data('data/sts-train.csv', 'train')
+
     dev_data = load_data(args.dev, 'valid')
 
-    train_dataset = MLMDataset(train_data, args)
+    train_dataset_SST = MLMDataset(train_data_SST, args)
+    train_dataset_CFIMDB = MLMDataset(train_data_CFIMDB, args)
+    train_dataset_quora = MLMDataset(train_data_quora, args)
+    train_dataset_STS = MLMDataset(train_data_STS, args)
+
+
     dev_dataset = SentimentDataset(dev_data, args)
 
-    train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=args.batch_size,
-                                  collate_fn=train_dataset.collate_fn)
+    train_dataloader_SST = DataLoader(train_dataset_SST, shuffle=True, batch_size=args.batch_size,
+                                  collate_fn=train_dataset_SST.collate_fn)
+    train_dataloader_CFIMDB = DataLoader(train_dataset_CFIMDB, shuffle=True, batch_size=args.batch_size,
+                                  collate_fn=train_dataset_CFIMDB.collate_fn)
+    train_dataloader_quora = DataLoader(train_dataset_quora, shuffle=True, batch_size=args.batch_size,
+                                  collate_fn=train_dataset_quora.collate_fn)
+    train_dataloader_STS = DataLoader(train_dataset_STS, shuffle=True, batch_size=args.batch_size,
+                                  collate_fn=train_dataset_STS.collate_fn)
+
     dev_dataloader = DataLoader(dev_dataset, shuffle=False, batch_size=args.batch_size,
                                 collate_fn=dev_dataset.collate_fn)
 
     # Init model
     config = {'hidden_dropout_prob': args.hidden_dropout_prob,
-              'num_labels': num_labels,
+              #'num_labels': num_labels,
               'hidden_size': 768,
               'data_dir': '.',
               'option': args.option}
@@ -417,69 +498,62 @@ def train(args):
     optimizer = AdamW(model.parameters(), lr=lr)
     best_dev_acc = 0
 
+    dataloaders = [train_dataloader_SST, train_dataloader_CFIMDB, train_dataloader_quora, train_dataloader_STS]
+    total_length = max(len(dl) for dl in dataloaders)
+
     # Run for the specified number of epochs
     for epoch in range(args.epochs):
         model.train()
         train_loss = 0
         num_batches = 0
-        for batch in tqdm(train_dataloader, desc=f'train-{epoch}', disable=TQDM_DISABLE):
-            b_ids, b_mask, b_labels, b_ids_masked, b_mask_masked, mask_indices = (batch['token_ids'],
-                                       batch['attention_mask'], batch['labels'],
-                                       batch['token_ids_masked'], batch['attention_mask_masked'], batch['mask_indices'])
 
-            b_ids_masked = b_ids_masked.to(device)
-            b_mask_masked = b_mask_masked.to(device)
-            b_labels = b_labels.to(device)
+        for batch_SST, batch_CFIMDB, batch_quora, batch_STS in tqdm(zip_longest(*dataloaders, fillvalue=None), total=total_length, desc=f'train-{epoch}', disable=TQDM_DISABLE):
 
-            # b_indices = []
-            # b_targets = b_ids #copy original labels to use as targets
-            # for sentence in b_ids:
-            #     len_sen = find_first_zero(sentence)
-            #     num_mask = int(0.15 * len_sen)
-            #     indices = np.random.choice(range(0, len_sen), size=num_mask, replace=False)
-            #     b_indices.append(indices)
-            #     for i in indices:
-            #         sentence[i] = -9999 #mask ID
-            # print(b_ids)
+            batches = [batch_SST, batch_CFIMDB, batch_quora, batch_STS]
+            for batch in batches:
+                if batch is not None:
+                    b_ids, b_mask, b_labels, b_ids_masked, b_mask_masked, mask_indices = (batch['token_ids'],
+                                               batch['attention_mask'], batch['labels'],
+                                               batch['token_ids_masked'], batch['attention_mask_masked'], batch['mask_indices'])
 
-            # for x in range(0, len(b_targets)): #loop through batch
-            #     for y in range(0, len(b_targets[x])): #loop through each sentence
-            #         if y not in b_indices[x]: #look at indices which aren't masked
-            #             b_targets[x] = float('-inf')  # we don't want to use non-masked targets
+                    b_ids_masked = b_ids_masked.to(device)
+                    b_mask_masked = b_mask_masked.to(device)
+                    b_labels = b_labels.to(device)
 
-            optimizer.zero_grad()
-            logits = model(b_ids_masked, b_mask_masked)
-            targets = torch.zeros_like(logits)
-            for i in range(0, len(targets)): #loops thru sentences
-                for j in range(0, len(targets[i])): #loops thru words in sentence
-                    if j in mask_indices[i]:
-                        targets[i][j][b_ids[i][j]] = 1
-                        #print("b ids: ", b_ids[i][j])
-                        #print("length of targets[i][j]", targets[i][j].size())
-                    else:
-                        targets[i][j] = torch.full_like(targets[i][j], -float('inf'))
+                    optimizer.zero_grad()
+                    logits = model(b_ids_masked, b_mask_masked)
+                    targets = torch.zeros_like(logits)
+                    for i in range(0, len(targets)): #loops thru sentences
+                        for j in range(0, len(targets[i])): #loops thru words in sentence
+                            if j in mask_indices[i]:
+                                targets[i][j][b_ids[i][j]] = 1
+                                #print("b ids: ", b_ids[i][j])
+                                #print("length of targets[i][j]", targets[i][j].size())
+                            else:
+                                targets[i][j] = torch.full_like(targets[i][j], -float('inf'))
 
 
-            print(targets)
-            loss = F.cross_entropy(logits, targets, reduction='sum') / args.batch_size
-            #loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
+                    loss = F.cross_entropy(logits, targets, reduction='sum') / args.batch_size
+                    #loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
 
-            loss.backward()
-            optimizer.step()
+                    loss.backward()
+                    optimizer.step()
 
-            train_loss += loss.item()
-            num_batches += 1
+                    train_loss += loss.item()
+                    num_batches += 1
 
         train_loss = train_loss / (num_batches)
 
-        train_acc, train_f1, *_  = model_eval(train_dataloader, model, device)
-        dev_acc, dev_f1, *_ = model_eval(dev_dataloader, model, device)
+        #train_acc, train_f1, *_  = model_eval(train_dataloader, model, device)
+        #dev_acc, dev_f1, *_ = model_eval(dev_dataloader, model, device)
 
-        if dev_acc > best_dev_acc:
-            best_dev_acc = dev_acc
+        # if dev_acc > best_dev_acc:
+        #     best_dev_acc = dev_acc
+        #     save_model(model, optimizer, args, config, args.filepath)
+        if(epoch == args.epochs - 1):
             save_model(model, optimizer, args, config, args.filepath)
 
-        print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
+        print(f"Epoch {epoch}: train loss :: {train_loss :.3f}")
 
 
 def test(args):
