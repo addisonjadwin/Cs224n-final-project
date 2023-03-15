@@ -460,7 +460,7 @@ def train(args):
     device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
     # Load data
     # Create the data and its corresponding datasets and dataloader
-    train_data_SST, num_labels_SST, train_data_quora, train_data_STS = load_multitask_data_MLM('data/ids-sst-train.csv', 'data/quora-train.csv', 'data/quora-train.csv', split='train')
+    train_data_SST, num_labels_SST, train_data_quora, train_data_STS = load_multitask_data_MLM('data/ids-sst-train.csv', 'data/quora-train.csv', 'data/sts-train.csv', split='train')
 
     dev_data = load_data(args.dev, 'valid')
 
