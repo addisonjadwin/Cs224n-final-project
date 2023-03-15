@@ -310,6 +310,13 @@ def load_data(filename, flag='train'):
     else:
         return data
 
+def preprocess_string(s):
+    return ' '.join(s.lower()
+                    .replace('.', ' .')
+                    .replace('?', ' ?')
+                    .replace(',', ' ,')
+                    .replace('\'', ' \'')
+                    .split())
 
 def load_multitask_data_MLM(sentiment_filename,paraphrase_filename,similarity_filename,split='train'):
     sentiment_data = []
@@ -346,9 +353,8 @@ def load_multitask_data_MLM(sentiment_filename,paraphrase_filename,similarity_fi
             for record in csv.DictReader(fp,delimiter = '\t'):
                 try:
                     sent_id = record['id'].lower().strip()
-                    paraphrase_data.append((preprocess_string(record['sentence1']),
-                                            preprocess_string(record['sentence2']),
-                                            int(float(record['is_duplicate'])),sent_id))
+                    paraphrase_data.append((preprocess_string(record['sentence1']), int(float(record['is_duplicate'])),sent_id))
+                    paraphrase_data.append((preprocess_string(record['sentence2']), int(float(record['is_duplicate'])),sent_id))
                 except:
                     pass
 
@@ -366,9 +372,8 @@ def load_multitask_data_MLM(sentiment_filename,paraphrase_filename,similarity_fi
         with open(similarity_filename, 'r') as fp:
             for record in csv.DictReader(fp,delimiter = '\t'):
                 sent_id = record['id'].lower().strip()
-                similarity_data.append((preprocess_string(record['sentence1']),
-                                        preprocess_string(record['sentence2']),
-                                        float(record['similarity']),sent_id))
+                similarity_data.append((preprocess_string(record['sentence1']), float(record['similarity']),sent_id))
+                similarity_data.append((preprocess_string(record['sentence2']), float(record['similarity']),sent_id))
 
     print(f"Loaded {len(similarity_data)} {split} examples from {similarity_filename}")
 
@@ -455,15 +460,11 @@ def train(args):
     device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
     # Load data
     # Create the data and its corresponding datasets and dataloader
-    train_data_SST, num_labels_SST = load_data('data/ids-sst-train.csv', 'train')
-    train_data_CFIMDB, num_labels_CFIMDB = load_data('data/ids-cfimdb-train.csv', 'train')
-    train_data_quora, num_labels_quora = load_data('data/quora-train.csv', 'train')
-    train_data_STS, num_labels_STS = load_data('data/sts-train.csv', 'train')
+    train_data_SST, num_labels_SST, train_data_quora, train_data_STS = load_multitask_data_MLM('data/ids-sst-train.csv', 'data/quora-train.csv', 'data/quora-train.csv', split='train')
 
     dev_data = load_data(args.dev, 'valid')
 
     train_dataset_SST = MLMDataset(train_data_SST, args)
-    train_dataset_CFIMDB = MLMDataset(train_data_CFIMDB, args)
     train_dataset_quora = MLMDataset(train_data_quora, args)
     train_dataset_STS = MLMDataset(train_data_STS, args)
 
@@ -472,8 +473,6 @@ def train(args):
 
     train_dataloader_SST = DataLoader(train_dataset_SST, shuffle=True, batch_size=args.batch_size,
                                   collate_fn=train_dataset_SST.collate_fn)
-    train_dataloader_CFIMDB = DataLoader(train_dataset_CFIMDB, shuffle=True, batch_size=args.batch_size,
-                                  collate_fn=train_dataset_CFIMDB.collate_fn)
     train_dataloader_quora = DataLoader(train_dataset_quora, shuffle=True, batch_size=args.batch_size,
                                   collate_fn=train_dataset_quora.collate_fn)
     train_dataloader_STS = DataLoader(train_dataset_STS, shuffle=True, batch_size=args.batch_size,
@@ -498,7 +497,7 @@ def train(args):
     optimizer = AdamW(model.parameters(), lr=lr)
     best_dev_acc = 0
 
-    dataloaders = [train_dataloader_SST, train_dataloader_CFIMDB, train_dataloader_quora, train_dataloader_STS]
+    dataloaders = [train_dataloader_SST, train_dataloader_quora, train_dataloader_STS]
     total_length = max(len(dl) for dl in dataloaders)
 
     # Run for the specified number of epochs
@@ -507,9 +506,9 @@ def train(args):
         train_loss = 0
         num_batches = 0
 
-        for batch_SST, batch_CFIMDB, batch_quora, batch_STS in tqdm(zip_longest(*dataloaders, fillvalue=None), total=total_length, desc=f'train-{epoch}', disable=TQDM_DISABLE):
+        for batch_SST, batch_quora, batch_STS in tqdm(zip_longest(*dataloaders, fillvalue=None), total=total_length, desc=f'train-{epoch}', disable=TQDM_DISABLE):
 
-            batches = [batch_SST, batch_CFIMDB, batch_quora, batch_STS]
+            batches = [batch_SST, batch_quora, batch_STS]
             for batch in batches:
                 if batch is not None:
                     b_ids, b_mask, b_labels, b_ids_masked, b_mask_masked, mask_indices = (batch['token_ids'],
@@ -551,7 +550,7 @@ def train(args):
         #     best_dev_acc = dev_acc
         #     save_model(model, optimizer, args, config, args.filepath)
         if(epoch == args.epochs - 1):
-            save_model(model, optimizer, args, config, args.filepath)
+            save_model(model, optimizer, args, config, 'MLM_pretrain.pt')
 
         print(f"Epoch {epoch}: train loss :: {train_loss :.3f}")
 
