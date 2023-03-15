@@ -593,7 +593,7 @@ def get_args():
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--option", type=str,
                         help='pretrain: the BERT parameters are frozen; finetune: BERT parameters are updated',
-                        choices=('pretrain', 'finetune'), default="pretrain")
+                        choices=('pretrain', 'finetune'), default="finetune")
     parser.add_argument("--use_gpu", action='store_true')
     parser.add_argument("--dev_out", type=str, default="cfimdb-dev-output.txt")
     parser.add_argument("--test_out", type=str, default="cfimdb-test-output.txt")
@@ -602,7 +602,7 @@ def get_args():
     parser.add_argument("--batch_size", help='sst: 64, cfimdb: 8 can fit a 12GB GPU', type=int, default=8)
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.3)
     parser.add_argument("--lr", type=float, help="learning rate, default lr for 'pretrain': 1e-3, 'finetune': 1e-5",
-                        default=1e-5)
+                        default=1e-3)
 
     args = parser.parse_args()
     return args
@@ -630,10 +630,10 @@ if __name__ == "__main__":
 
     train(config)
 
-    print('Evaluating on SST...')
-    test(config)
+    #print('Evaluating on SST...')
+    #test(config)
 
-    print('Training Sentiment Classifier on cfimdb...')
+    #print('Training Sentiment Classifier on cfimdb...')
     config = SimpleNamespace(
         filepath='cfimdb-classifier.pt',
         lr=args.lr,
@@ -649,7 +649,7 @@ if __name__ == "__main__":
         test_out = 'predictions/'+args.option+'-cfimdb-test-out.csv'
     )
 
-    train(config)
+    #train(config)
 
-    print('Evaluating on cfimdb...')
-    test(config)
+    #print('Evaluating on cfimdb...')
+    #test(config)
